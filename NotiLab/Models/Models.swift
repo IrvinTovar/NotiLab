@@ -49,6 +49,7 @@ struct NotificationTemplate: Identifiable, Codable, Equatable {
     var tint: TemplateTint
     var title: String
     var body: String
+    var imageName: String?
 
     init(
         id: UUID = UUID(),
@@ -56,7 +57,8 @@ struct NotificationTemplate: Identifiable, Codable, Equatable {
         icon: String,
         tint: TemplateTint,
         title: String,
-        body: String
+        body: String,
+        imageName: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -64,6 +66,7 @@ struct NotificationTemplate: Identifiable, Codable, Equatable {
         self.tint = tint
         self.title = title
         self.body = body
+        self.imageName = imageName
     }
 
     static let blank = NotificationTemplate(
@@ -134,12 +137,36 @@ enum TemplateIcon {
         "phone.fill",
         "message.fill",
         "envelope.fill",
+        "music.note",
+        "play.circle.fill",
+        "headphones",
+        "camera.fill",
+        "photo.fill",
+        "gamecontroller.fill",
         "calendar.badge.clock",
         "gift.fill",
         "heart.fill",
         "star.fill",
         "person.crop.circle.fill",
         "sparkles"
+    ]
+}
+
+struct IconPreset: Identifiable {
+    let id: String
+    let name: String
+    let icon: String
+    let tint: TemplateTint
+
+    static let all: [IconPreset] = [
+        IconPreset(id: "tienda", name: "Tienda", icon: "bag.fill", tint: .green),
+        IconPreset(id: "musica", name: "Música", icon: "music.note", tint: .purple),
+        IconPreset(id: "mensajes", name: "Mensajes", icon: "message.fill", tint: .teal),
+        IconPreset(id: "llamada", name: "Llamada", icon: "phone.down.fill", tint: .red),
+        IconPreset(id: "envio", name: "Envío", icon: "shippingbox.fill", tint: .orange),
+        IconPreset(id: "pago", name: "Pago", icon: "creditcard.fill", tint: .blue),
+        IconPreset(id: "social", name: "Social", icon: "heart.fill", tint: .pink),
+        IconPreset(id: "juegos", name: "Juegos", icon: "gamecontroller.fill", tint: .purple)
     ]
 }
 
@@ -277,14 +304,126 @@ enum Distribution: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum TimeUnit: String, Codable, CaseIterable, Identifiable {
+    case seconds
+    case minutes
+    case hours
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .seconds: return "Segundos"
+        case .minutes: return "Minutos"
+        case .hours: return "Horas"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .seconds: return "s"
+        case .minutes: return "min"
+        case .hours: return "h"
+        }
+    }
+
+    var seconds: Int {
+        switch self {
+        case .seconds: return 1
+        case .minutes: return 60
+        case .hours: return 3600
+        }
+    }
+}
+
+struct TimeAmount: Codable, Equatable, Hashable {
+    var value: Int
+    var unit: TimeUnit
+
+    var seconds: Int { value * unit.seconds }
+    var display: String { "\(value) \(unit.shortTitle)" }
+
+    static let defaultWindow = TimeAmount(value: 2, unit: .hours)
+    static let defaultDelay = TimeAmount(value: 1, unit: .minutes)
+}
+
 struct ScheduleConfig: Codable, Equatable {
     var count: Int = 6
-    var windowMinutes: Int = 120
-    var delayMinutes: Int = 1
+    var window: TimeAmount = .defaultWindow
+    var delay: TimeAmount = .defaultDelay
     var distribution: Distribution = .random
     var soundEnabled: Bool = true
     var badgeEnabled: Bool = false
     var replaceExisting: Bool = true
+
+    private enum CodingKeys: String, CodingKey {
+        case count
+        case window
+        case delay
+        case windowMinutes
+        case delayMinutes
+        case distribution
+        case soundEnabled
+        case badgeEnabled
+        case replaceExisting
+    }
+
+    init() {}
+
+    init(
+        count: Int,
+        window: TimeAmount,
+        delay: TimeAmount,
+        distribution: Distribution,
+        soundEnabled: Bool,
+        badgeEnabled: Bool,
+        replaceExisting: Bool
+    ) {
+        self.count = count
+        self.window = window
+        self.delay = delay
+        self.distribution = distribution
+        self.soundEnabled = soundEnabled
+        self.badgeEnabled = badgeEnabled
+        self.replaceExisting = replaceExisting
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        count = try container.decodeIfPresent(Int.self, forKey: .count) ?? 6
+
+        if let window = try container.decodeIfPresent(TimeAmount.self, forKey: .window) {
+            self.window = window
+        } else if let minutes = try container.decodeIfPresent(Int.self, forKey: .windowMinutes) {
+            self.window = TimeAmount(value: minutes, unit: .minutes)
+        } else {
+            self.window = .defaultWindow
+        }
+
+        if let delay = try container.decodeIfPresent(TimeAmount.self, forKey: .delay) {
+            self.delay = delay
+        } else if let minutes = try container.decodeIfPresent(Int.self, forKey: .delayMinutes) {
+            self.delay = TimeAmount(value: minutes, unit: .minutes)
+        } else {
+            self.delay = .defaultDelay
+        }
+
+        distribution = try container.decodeIfPresent(Distribution.self, forKey: .distribution) ?? .random
+        soundEnabled = try container.decodeIfPresent(Bool.self, forKey: .soundEnabled) ?? true
+        badgeEnabled = try container.decodeIfPresent(Bool.self, forKey: .badgeEnabled) ?? false
+        replaceExisting = try container.decodeIfPresent(Bool.self, forKey: .replaceExisting) ?? true
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(count, forKey: .count)
+        try container.encode(window, forKey: .window)
+        try container.encode(delay, forKey: .delay)
+        try container.encode(distribution, forKey: .distribution)
+        try container.encode(soundEnabled, forKey: .soundEnabled)
+        try container.encode(badgeEnabled, forKey: .badgeEnabled)
+        try container.encode(replaceExisting, forKey: .replaceExisting)
+    }
 }
 
 // MARK: - Resolved payload

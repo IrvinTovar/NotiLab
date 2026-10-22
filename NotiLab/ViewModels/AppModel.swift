@@ -45,7 +45,12 @@ final class AppModel: ObservableObject {
 
         templates = safeTemplates
         names = Self.load(NamesConfig.self, key: Keys.names) ?? NamesConfig()
-        schedule = Self.load(ScheduleConfig.self, key: Keys.schedule) ?? ScheduleConfig()
+
+        var loadedSchedule = Self.load(ScheduleConfig.self, key: Keys.schedule) ?? ScheduleConfig()
+        loadedSchedule.count = min(max(loadedSchedule.count, 1), 64)
+        loadedSchedule.window.value = max(1, loadedSchedule.window.value)
+        loadedSchedule.delay.value = max(0, loadedSchedule.delay.value)
+        schedule = loadedSchedule
 
         let storedID = defaults.string(forKey: Keys.selectedTemplate)
             .flatMap(UUID.init(uuidString:))
@@ -161,6 +166,8 @@ final class AppModel: ObservableObject {
 
     func deleteTemplate(_ template: NotificationTemplate) {
         guard templates.count > 1 else { return }
+        TemplateImageStore.shared.delete(named: template.imageName)
+        TemplateImageStore.shared.deleteGenerated(for: template.id)
         templates.removeAll { $0.id == template.id }
         if selectedTemplateID == template.id, let first = templates.first {
             selectedTemplateID = first.id
@@ -168,6 +175,10 @@ final class AppModel: ObservableObject {
     }
 
     func resetTemplates() {
+        for template in templates {
+            TemplateImageStore.shared.delete(named: template.imageName)
+            TemplateImageStore.shared.deleteGenerated(for: template.id)
+        }
         templates = NotificationTemplate.defaults
         selectedTemplateID = templates[0].id
         showToast("Plantillas restauradas")

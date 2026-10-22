@@ -6,20 +6,22 @@ NotiLab es una app nativa de iPhone para programar **notificaciones locales de d
 
 ## Funciones
 
-- **Programación flexible**: elige cuántas notificaciones quieres (1–64) y repártelas de forma aleatoria o uniforme durante una ventana de tiempo configurable.
+- **Cantidad y tiempos exactos**: escribe el número directamente y elige segundos, minutos u horas. Puedes programar, por ejemplo, 64 avisos repartidos en 20 segundos.
 - **Se envían al cerrar la app**: iOS entrega las notificaciones locales programadas aunque la app no esté abierta.
 - **Nombres de México y Argentina**: listas incluidas, selección de región mixta y nombres personalizados.
 - **Tokens**: usa `{nombre}`, `{ciudad}` o `{monto}` en el título o el mensaje.
+- **Miniatura personalizada**: usa una imagen de tu fototeca o elige iconos genéricos de tienda, música, mensajes, llamada, envío, pago, social y juegos. La imagen se adjunta al aviso.
 - **Plantillas personalizables**: título, mensaje, icono, color y nombre de la plantilla. Vienen seis presets de tienda, pago, llamada perdida, mensaje, envío y recordatorio.
 - **Vista previa** de la notificación antes de programarla.
 - **Prueba en 5 segundos** desde la pantalla principal.
 - **Ajustes**: sonido, badge, reemplazo de programaciones anteriores y restauración de valores.
-- **Privacidad primero**: no hay cuentas, servidores ni analytics. Todo se guarda en `UserDefaults` en el dispositivo.
+- **Privacidad primero**: no hay cuentas, servidores ni analytics. Todo se guarda en `UserDefaults` y en el contenedor local de la app.
 
 ## Límites de iOS
 
-- El sistema permite un máximo de **64 notificaciones pendientes** por app. Si pides más, se recortan a 64.
-- Las notificaciones locales muestran el nombre e icono de NotiLab. **No es posible** mostrar el nombre de Shopify, WhatsApp, una llamada telefónica real u otra app desde una notificación local.
+- El sistema permite un máximo de **64 notificaciones pendientes** por app. Si intentas programar 100 en una sola tanda, solo se pueden dejar 64; para más haría falta un servidor de notificaciones push. Sí puedes configurar 64 avisos en 20 segundos.
+- La **cabecera** de la notificación siempre muestra el nombre e icono de NotiLab. No es posible cambiarla por la de Spotify, Shopify, WhatsApp, una llamada real u otra app desde una notificación local.
+- La **miniatura** que elijas (imagen o icono genérico) sí se muestra en la vista previa y se adjunta al aviso. No incluimos logotipos de marcas; puedes importar una imagen propia.
 - Una llamada entrante real requiere CallKit y un servidor VoIP; NotiLab no simula el sistema de llamadas. El preset “Llamada perdida” es solo una notificación de demostración.
 - La entrega exacta depende de iOS, el modo Concentración y los ajustes de notificaciones del usuario.
 

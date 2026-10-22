@@ -52,9 +52,10 @@ final class NotificationService: ObservableObject {
         }
 
         let count = min(max(config.count, 1), maxPending)
-        let window = TimeInterval(max(config.windowMinutes, 1) * 60)
-        let delay = TimeInterval(max(config.delayMinutes, 0) * 60)
+        let window = TimeInterval(max(config.window.seconds, 1))
+        let delay = TimeInterval(max(config.delay.seconds, 0))
         let offsets = makeOffsets(count: count, window: window, distribution: config.distribution)
+        let attachmentURL = TemplateImageStore.shared.attachmentURL(for: template)
 
         var scheduled = 0
         for (index, offset) in offsets.enumerated() {
@@ -79,8 +80,16 @@ final class NotificationService: ObservableObject {
                 "demo": true,
                 "template": template.name
             ]
+            if let attachmentURL,
+               let attachment = try? UNNotificationAttachment(
+                   identifier: "notilab.thumbnail",
+                   url: attachmentURL,
+                   options: nil
+               ) {
+                content.attachments = [attachment]
+            }
 
-            let interval = max(2, delay + offset)
+            let interval = max(1, delay + offset)
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
             let request = UNNotificationRequest(
                 identifier: "\(prefix)\(UUID().uuidString)",
@@ -121,6 +130,14 @@ final class NotificationService: ObservableObject {
         }
         content.threadIdentifier = "notilab.test"
         content.userInfo = ["demo": true, "template": template.name]
+        if let attachmentURL = TemplateImageStore.shared.attachmentURL(for: template),
+           let attachment = try? UNNotificationAttachment(
+               identifier: "notilab.thumbnail",
+               url: attachmentURL,
+               options: nil
+           ) {
+            content.attachments = [attachment]
+        }
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)
         let request = UNNotificationRequest(

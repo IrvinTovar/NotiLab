@@ -206,11 +206,24 @@ struct ToastView: View {
 // MARK: - Formatters
 
 enum DurationText {
+    static func seconds(_ value: Int) -> String {
+        guard value >= 60 else { return "\(value) s" }
+        guard value >= 3600 else {
+            let minutes = value / 60
+            let seconds = value % 60
+            return seconds == 0 ? "\(minutes) min" : "\(minutes) min \(seconds) s"
+        }
+
+        let hours = value / 3600
+        let minutes = (value % 3600) / 60
+        if minutes == 0 {
+            return "\(hours) h"
+        }
+        return "\(hours) h \(minutes) min"
+    }
+
     static func minutes(_ value: Int) -> String {
-        guard value >= 60 else { return "\(value) min" }
-        let hours = value / 60
-        let minutes = value % 60
-        return minutes == 0 ? "\(hours) h" : "\(hours) h \(minutes) min"
+        seconds(value * 60)
     }
 
     static func short(_ date: Date) -> String {
@@ -219,4 +232,13 @@ enum DurationText {
         formatter.dateFormat = "EEE d, HH:mm"
         return formatter.string(from: date)
     }
+}
+
+func nlHideKeyboard() {
+    UIApplication.shared.sendAction(
+        #selector(UIResponder.resignFirstResponder),
+        to: nil,
+        from: nil,
+        for: nil
+    )
 }

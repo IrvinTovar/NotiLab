@@ -140,7 +140,7 @@ struct SettingsView: View {
                 Image(systemName: "info.circle.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("Los avisos se envían aunque cierres la app. iOS permite hasta 64 notificaciones pendientes por app; si programas más, se recortan a 64.")
+                Text("Los avisos se envían aunque cierres la app. iOS permite hasta 64 notificaciones pendientes por app; la miniatura se adjunta al aviso, pero la cabecera siempre muestra NotiLab.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

@@ -33,11 +33,16 @@ struct ScheduleView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        nlHideKeyboard()
                         Task { await model.scheduleTest() }
                     } label: {
                         Image(systemName: "paperplane.fill")
                     }
                     .accessibilityLabel("Enviar notificación de prueba")
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Listo") { nlHideKeyboard() }
                 }
             }
             .sheet(isPresented: $showTemplatePicker) {
@@ -142,7 +147,7 @@ struct ScheduleView: View {
                 showTemplatePicker = true
             } label: {
                 HStack(spacing: 12) {
-                    IconBadge(icon: template.icon, tint: template.tint.color, size: 40)
+                    TemplateIconView(template: template, size: 40)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(template.name)
                             .font(.subheadline.weight(.semibold))
@@ -163,31 +168,28 @@ struct ScheduleView: View {
 
             Divider().opacity(0.5)
 
-            ValueStepper(
+            NumberStepper(
                 title: "Cantidad",
-                subtitle: "Avisos que se van a programar.",
+                subtitle: "Escribe el número exacto. iOS permite hasta \(model.pendingLimit).",
                 value: $model.schedule.count,
                 range: 1...model.pendingLimit,
-                step: 1,
-                display: { "\($0)" }
+                step: 1
             )
 
-            ValueStepper(
+            TimeAmountEditor(
                 title: "Durante",
                 subtitle: "Ventana de tiempo para repartirlos.",
-                value: $model.schedule.windowMinutes,
-                range: 1...720,
-                step: 5,
-                display: { DurationText.minutes($0) }
+                amount: $model.schedule.window,
+                allowsZero: false,
+                maxSeconds: 2_592_000
             )
 
-            ValueStepper(
+            TimeAmountEditor(
                 title: "Empezar en",
                 subtitle: "Tiempo antes del primer aviso.",
-                value: $model.schedule.delayMinutes,
-                range: 0...120,
-                step: 1,
-                display: { $0 == 0 ? "Ahora" : "+\(DurationText.minutes($0))" }
+                amount: $model.schedule.delay,
+                allowsZero: true,
+                maxSeconds: 2_592_000
             )
 
             VStack(alignment: .leading, spacing: 8) {
@@ -246,7 +248,8 @@ struct ScheduleView: View {
 
             HStack {
                 Button {
-                    Task { await model.scheduleTest() }
+                    nlHideKeyboard()
+                        Task { await model.scheduleTest() }
                 } label: {
                     Label("Probar en 5 s", systemImage: "play.fill")
                         .font(.caption.weight(.semibold))
@@ -271,6 +274,7 @@ struct ScheduleView: View {
     private var primaryButton: some View {
         VStack(alignment: .leading, spacing: 8) {
             Button {
+                nlHideKeyboard()
                 Task { await model.scheduleNow() }
             } label: {
                 HStack(spacing: 10) {
@@ -308,7 +312,7 @@ struct ScheduleView: View {
             .buttonStyle(.plain)
             .disabled(model.isBusy)
 
-            Text("Se enviarán entre ahora y dentro de \(DurationText.minutes(model.schedule.delayMinutes + model.schedule.windowMinutes)).")
+            Text("Se enviarán entre ahora y dentro de \(DurationText.seconds(model.schedule.delay.seconds + model.schedule.window.seconds)).")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
@@ -388,13 +392,75 @@ struct ScheduleView: View {
 
 // MARK: - Value stepper
 
-struct ValueStepper: View {
+struct EditableIntField: View {
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    var width: CGFloat = 52
+
+    @State private var text = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        TextField("", text: $text)
+            .keyboardType(.numberPad)
+            .multilineTextAlignment(.center)
+            .font(.subheadline.weight(.semibold))
+            .monospacedDigit()
+            .frame(width: width)
+            .focused($focused)
+            .onAppear {
+                text = "\(value)"
+            }
+            .onChange(of: text) { _, newText in
+                let digits = newText.filter(\.isNumber)
+                if digits != newText {
+                    text = digits
+                    return
+                }
+                guard !digits.isEmpty, let parsed = Int(digits) else { return }
+                let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+                if clamped != parsed {
+                    text = "\(clamped)"
+                }
+                if value != clamped {
+                    value = clamped
+                }
+            }
+            .onChange(of: value) { _, newValue in
+                if !focused, text != "\(newValue)" {
+                    text = "\(newValue)"
+                }
+            }
+            .onChange(of: range.upperBound) { _, _ in
+                let clamped = min(max(value, range.lowerBound), range.upperBound)
+                if clamped != value {
+                    value = clamped
+                }
+                if !focused {
+                    text = "\(clamped)"
+                }
+            }
+            .onChange(of: focused) { _, isFocused in
+                if !isFocused {
+                    commit()
+                }
+            }
+    }
+
+    private func commit() {
+        let parsed = Int(text) ?? value
+        let clamped = min(max(parsed, range.lowerBound), range.upperBound)
+        value = clamped
+        text = "\(clamped)"
+    }
+}
+
+struct NumberStepper: View {
     let title: String
     let subtitle: String
     @Binding var value: Int
     let range: ClosedRange<Int>
     let step: Int
-    let display: (Int) -> String
 
     var body: some View {
         HStack(spacing: 12) {
@@ -419,11 +485,7 @@ struct ValueStepper: View {
                 }
                 .disabled(value <= range.lowerBound)
 
-                Text(display(value))
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
-                    .frame(minWidth: 58)
-                    .contentTransition(.numericText())
+                EditableIntField(value: $value, range: range)
 
                 Button {
                     value = min(range.upperBound, value + step)
@@ -433,6 +495,87 @@ struct ValueStepper: View {
                         .frame(width: 34, height: 34)
                 }
                 .disabled(value >= range.upperBound)
+            }
+            .foregroundStyle(.primary)
+            .background(Color.primary.opacity(0.07), in: Capsule())
+            .buttonStyle(.plain)
+        }
+    }
+}
+
+struct TimeAmountEditor: View {
+    let title: String
+    let subtitle: String
+    @Binding var amount: TimeAmount
+    let allowsZero: Bool
+    let maxSeconds: Int
+
+    private var lowerBound: Int { allowsZero ? 0 : 1 }
+    private var maxValue: Int { max(1, maxSeconds / amount.unit.seconds) }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 0) {
+                Button {
+                    amount.value = max(lowerBound, amount.value - 1)
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.caption.weight(.bold))
+                        .frame(width: 34, height: 34)
+                }
+                .disabled(amount.value <= lowerBound)
+
+                EditableIntField(
+                    value: $amount.value,
+                    range: lowerBound...maxValue,
+                    width: 46
+                )
+
+                Menu {
+                    ForEach(TimeUnit.allCases) { unit in
+                        Button {
+                            amount.unit = unit
+                            let upper = max(1, maxSeconds / unit.seconds)
+                            amount.value = min(max(amount.value, lowerBound), upper)
+                        } label: {
+                            HStack {
+                                Text(unit.title)
+                                if amount.unit == unit {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 3) {
+                        Text(amount.unit.shortTitle)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                }
+
+                Button {
+                    amount.value = min(maxValue, amount.value + 1)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.caption.weight(.bold))
+                        .frame(width: 34, height: 34)
+                }
+                .disabled(amount.value >= maxValue)
             }
             .foregroundStyle(.primary)
             .background(Color.primary.opacity(0.07), in: Capsule())

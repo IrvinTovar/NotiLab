@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 struct TemplatesView: View {
     @EnvironmentObject private var model: AppModel
@@ -95,7 +97,7 @@ struct TemplateCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
-                IconBadge(icon: template.icon, tint: template.tint.color, size: 42)
+                TemplateIconView(template: template, size: 42)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(template.name)
@@ -173,7 +175,7 @@ struct TemplatePickerSheet: View {
                         dismiss()
                     } label: {
                         HStack(spacing: 12) {
-                            IconBadge(icon: template.icon, tint: template.tint.color, size: 38)
+                            TemplateIconView(template: template, size: 38)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(template.name)
                                     .font(.subheadline.weight(.semibold))
@@ -218,12 +220,16 @@ struct TemplateEditorView: View {
 
     @State private var draft: NotificationTemplate
     @State private var showDeleteAlert = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var isImportingImage = false
 
     private let isNew: Bool
+    private let originalImageName: String?
 
     init(template: NotificationTemplate, isNew: Bool) {
         _draft = State(initialValue: template)
         self.isNew = isNew
+        self.originalImageName = template.imageName
     }
 
     private var preview: NotificationPayload {
@@ -244,6 +250,8 @@ struct TemplateEditorView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
                     nameField
+                    imageSection
+                    presetPicker
                     iconPicker
                     tintPicker
                     titleField
@@ -268,9 +276,14 @@ struct TemplateEditorView: View {
                         .fontWeight(.semibold)
                         .disabled(draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Listo") { nlHideKeyboard() }
+                }
             }
             .alert("Eliminar plantilla", isPresented: $showDeleteAlert) {
                 Button("Eliminar", role: .destructive) {
+                    TemplateImageStore.shared.delete(named: originalImageName)
                     model.deleteTemplate(draft)
                     dismiss()
                 }
@@ -293,9 +306,120 @@ struct TemplateEditorView: View {
         }
     }
 
+    private var imageSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(
+                title: "Miniatura de la notificación",
+                subtitle: "Usa una imagen propia o un icono genérico. La cabecera del sistema siempre mostrará NotiLab."
+            )
+
+            HStack(spacing: 14) {
+                TemplateIconView(template: draft, size: 66)
+                    .overlay(alignment: .bottomTrailing) {
+                        if isImportingImage {
+                            ProgressView()
+                                .tint(.white)
+                                .padding(6)
+                                .background(Color.black.opacity(0.55), in: Circle())
+                        }
+                    }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                        Label("Elegir imagen", systemImage: "photo.on.rectangle")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.nlAccent.opacity(0.12), in: Capsule())
+                            .foregroundStyle(Color.nlAccent)
+                    }
+                    .buttonStyle(.plain)
+
+                    if draft.imageName != nil {
+                        Button(role: .destructive) {
+                            draft.imageName = nil
+                        } label: {
+                            Label("Quitar imagen", systemImage: "trash")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.nlRed)
+                    }
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            Text("JPG o PNG, se recorta en cuadrado. La imagen se adjunta al aviso; el icono de NotiLab en la cabecera no cambia.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .nlCard()
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            isImportingImage = true
+            Task { @MainActor in
+                defer {
+                    isImportingImage = false
+                    selectedPhotoItem = nil
+                }
+                guard let data = try? await newItem.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data),
+                      let filename = TemplateImageStore.shared.save(image: image) else {
+                    return
+                }
+                draft.imageName = filename
+            }
+        }
+    }
+
+    private var presetPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(
+                title: "Estilos rápidos",
+                subtitle: "Iconos genéricos de tienda, música, mensajes, llamadas y más. No incluimos logotipos de marcas."
+            )
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(IconPreset.all) { preset in
+                        Button {
+                            draft.icon = preset.icon
+                            draft.tint = preset.tint
+                            draft.imageName = nil
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: preset.icon)
+                                    .font(.system(size: 13, weight: .semibold))
+                                Text(preset.name)
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 8)
+                            .background(
+                                draft.icon == preset.icon && draft.tint == preset.tint && draft.imageName == nil
+                                    ? preset.tint.color.opacity(0.20)
+                                    : Color.primary.opacity(0.06),
+                                in: Capsule()
+                            )
+                            .foregroundStyle(
+                                draft.icon == preset.icon && draft.tint == preset.tint && draft.imageName == nil
+                                    ? preset.tint.color
+                                    : Color.secondary
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .nlCard()
+    }
+
     private var iconPicker: some View {
         VStack(alignment: .leading, spacing: 10) {
-            SectionHeader(title: "Icono", subtitle: "Elige el símbolo que aparecerá en el aviso.")
+            SectionHeader(title: "Icono", subtitle: "Elige el símbolo que aparecerá en la vista previa y como miniatura.")
 
             LazyVGrid(
                 columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6),
@@ -303,6 +427,7 @@ struct TemplateEditorView: View {
             ) {
                 ForEach(TemplateIcon.all, id: \.self) { icon in
                     Button {
+                        draft.imageName = nil
                         draft.icon = icon
                     } label: {
                         Image(systemName: icon)
@@ -436,9 +561,13 @@ struct TemplateEditorView: View {
     private func save() {
         let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return }
+        nlHideKeyboard()
         draft.name = trimmedName
         draft.title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
         draft.body = draft.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if originalImageName != draft.imageName {
+            TemplateImageStore.shared.delete(named: originalImageName)
+        }
         model.upsertTemplate(draft)
         dismiss()
     }
