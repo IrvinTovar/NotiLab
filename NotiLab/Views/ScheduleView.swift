@@ -249,7 +249,7 @@ struct ScheduleView: View {
             HStack {
                 Button {
                     nlHideKeyboard()
-                        Task { await model.scheduleTest() }
+                    Task { await model.scheduleTest() }
                 } label: {
                     Label("Probar en 5 s", systemImage: "play.fill")
                         .font(.caption.weight(.semibold))
@@ -514,7 +514,7 @@ struct TimeAmountEditor: View {
     private var maxValue: Int { max(1, maxSeconds / amount.unit.seconds) }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.subheadline.weight(.medium))
@@ -526,60 +526,60 @@ struct TimeAmountEditor: View {
 
             Spacer(minLength: 8)
 
-            HStack(spacing: 0) {
-                Button {
-                    amount.value = max(lowerBound, amount.value - 1)
-                } label: {
-                    Image(systemName: "minus")
-                        .font(.caption.weight(.bold))
-                        .frame(width: 34, height: 34)
+            VStack(alignment: .trailing, spacing: 7) {
+                HStack(spacing: 0) {
+                    Button {
+                        amount.value = max(lowerBound, amount.value - 1)
+                    } label: {
+                        Image(systemName: "minus")
+                            .font(.caption.weight(.bold))
+                            .frame(width: 34, height: 34)
+                    }
+                    .disabled(amount.value <= lowerBound)
+
+                    EditableIntField(
+                        value: $amount.value,
+                        range: lowerBound...maxValue,
+                        width: 46
+                    )
+
+                    Button {
+                        amount.value = min(maxValue, amount.value + 1)
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.caption.weight(.bold))
+                            .frame(width: 34, height: 34)
+                    }
+                    .disabled(amount.value >= maxValue)
                 }
-                .disabled(amount.value <= lowerBound)
+                .foregroundStyle(.primary)
+                .background(Color.primary.opacity(0.07), in: Capsule())
+                .buttonStyle(.plain)
 
-                EditableIntField(
-                    value: $amount.value,
-                    range: lowerBound...maxValue,
-                    width: 46
-                )
-
-                Menu {
+                HStack(spacing: 0) {
                     ForEach(TimeUnit.allCases) { unit in
                         Button {
-                            amount.unit = unit
                             let upper = max(1, maxSeconds / unit.seconds)
+                            amount.unit = unit
                             amount.value = min(max(amount.value, lowerBound), upper)
                         } label: {
-                            HStack {
-                                Text(unit.title)
-                                if amount.unit == unit {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
+                            Text(unit.shortTitle)
+                                .font(.caption2.weight(.bold))
+                                .frame(minWidth: 32)
+                                .padding(.vertical, 4)
+                                .background(
+                                    amount.unit == unit ? Color.primary.opacity(0.12) : Color.clear,
+                                    in: Capsule()
+                                )
+                                .foregroundStyle(amount.unit == unit ? Color.primary : Color.secondary)
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Unidad \(unit.title)")
                     }
-                } label: {
-                    HStack(spacing: 3) {
-                        Text(amount.unit.shortTitle)
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 8, weight: .bold))
-                    }
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
                 }
-
-                Button {
-                    amount.value = min(maxValue, amount.value + 1)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.caption.weight(.bold))
-                        .frame(width: 34, height: 34)
-                }
-                .disabled(amount.value >= maxValue)
+                .padding(2)
+                .background(Color.primary.opacity(0.05), in: Capsule())
             }
-            .foregroundStyle(.primary)
-            .background(Color.primary.opacity(0.07), in: Capsule())
-            .buttonStyle(.plain)
         }
     }
 }
