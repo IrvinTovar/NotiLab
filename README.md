@@ -38,11 +38,17 @@ xcodebuild -project NotiLab.xcodeproj -scheme NotiLab -configuration Release \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
 ```
 
-El flujo de GitHub Actions [`.github/workflows/build-ipa.yml`](.github/workflows/build-ipa.yml) genera automáticamente:
+El flujo de [Codemagic](codemagic.yaml) genera automáticamente:
 
 - `NotiLab-unsigned.ipa`
 - su SHA-256
 - capturas del simulador
+
+## Capturas
+
+| Programar | Plantillas | Ajustes |
+| --- | --- | --- |
+| ![Programar](docs/screenshots/01-programar.png) | ![Plantillas](docs/screenshots/02-plantillas.png) | ![Ajustes](docs/screenshots/03-ajustes.png) |
 
 ## Instalar el IPA
 
@@ -66,5 +72,6 @@ NotiLab/
 │   ├── Views/          # Programar, Plantillas, Ajustes
 │   └── Resources/      # icono y colores
 ├── project.yml
-└── .github/workflows/build-ipa.yml
+├── codemagic.yaml
+└── docs/screenshots/
 ```
