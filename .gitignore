@@ -5,6 +5,9 @@ build-sim/
 DerivedData/
 Payload/
 screenshots/
+!docs/screenshots/
+!docs/screenshots/*.png
+dist/
 NotiLab.xcodeproj/
 *.ipa
 *.sha256
