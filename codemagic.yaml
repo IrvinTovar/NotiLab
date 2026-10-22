@@ -1,0 +1,94 @@
+workflows:
+  notilab-unsigned:
+    name: NotiLab unsigned IPA
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: latest
+    scripts:
+      - name: Install XcodeGen
+        script: |
+          set -e
+          brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Generate Xcode project
+        script: xcodegen generate
+      - name: Build unsigned app
+        script: |
+          set -o pipefail
+          xcodebuild \
+            -project NotiLab.xcodeproj \
+            -scheme NotiLab \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+      - name: Package IPA
+        script: |
+          set -euo pipefail
+          APP_PATH="build/Build/Products/Release-iphoneos/NotiLab.app"
+          test -d "$APP_PATH"
+          rm -rf Payload NotiLab-unsigned.ipa NotiLab-unsigned.ipa.sha256
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry NotiLab-unsigned.ipa Payload
+          shasum -a 256 NotiLab-unsigned.ipa | tee NotiLab-unsigned.ipa.sha256
+      - name: Build simulator app and capture screenshots
+        script: |
+          set -euo pipefail
+          DEVICE_ID=$(python3 - <<'PY'
+          import json, subprocess
+          data = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))
+          for runtime, devices in data["devices"].items():
+              if "iOS" not in runtime:
+                  continue
+              for device in devices:
+                  if device["name"].startswith("iPhone"):
+                      print(device["udid"])
+                      raise SystemExit
+          raise SystemExit("No iPhone simulator found")
+          PY
+          )
+          echo "Using simulator $DEVICE_ID"
+          xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl ui "$DEVICE_ID" appearance dark || true
+          xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --batteryState charged --batteryLevel 100 || true
+
+          xcodebuild \
+            -project NotiLab.xcodeproj \
+            -scheme NotiLab \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -derivedDataPath build-sim \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+          APP_PATH="build-sim/Build/Products/Debug-iphonesimulator/NotiLab.app"
+          test -d "$APP_PATH"
+          mkdir -p screenshots
+          xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+
+          xcrun simctl launch "$DEVICE_ID" com.irvintovar.notilab
+          sleep 4
+          xcrun simctl io "$DEVICE_ID" screenshot screenshots/01-programar.png
+
+          xcrun simctl terminate "$DEVICE_ID" com.irvintovar.notilab || true
+          xcrun simctl launch "$DEVICE_ID" com.irvintovar.notilab -templates
+          sleep 3
+          xcrun simctl io "$DEVICE_ID" screenshot screenshots/02-plantillas.png
+
+          xcrun simctl terminate "$DEVICE_ID" com.irvintovar.notilab || true
+          xcrun simctl launch "$DEVICE_ID" com.irvintovar.notilab -settings
+          sleep 3
+          xcrun simctl io "$DEVICE_ID" screenshot screenshots/03-ajustes.png
+
+          ls -lh screenshots
+    artifacts:
+      - NotiLab-unsigned.ipa
+      - NotiLab-unsigned.ipa.sha256
+      - screenshots/*.png
