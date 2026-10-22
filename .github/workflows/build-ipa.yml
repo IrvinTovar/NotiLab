@@ -1,0 +1,127 @@
+name: Build NotiLab IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build unsigned IPA and screenshots
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build unsigned device app and IPA
+        run: |
+          set -euo pipefail
+          rm -rf build-device Payload NotiLab-unsigned.ipa NotiLab-unsigned.ipa.sha256
+          xcodebuild \
+            -project NotiLab.xcodeproj \
+            -scheme NotiLab \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build-device \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+          mkdir -p Payload
+          cp -R build-device/Build/Products/Release-iphoneos/NotiLab.app Payload/
+          cd Payload
+          zip -qry ../NotiLab-unsigned.ipa .
+          cd ..
+
+          test -f NotiLab-unsigned.ipa
+          shasum -a 256 NotiLab-unsigned.ipa | tee NotiLab-unsigned.ipa.sha256
+          ls -lh NotiLab-unsigned.ipa
+
+      - name: Build simulator app and capture screenshots
+        run: |
+          set -euo pipefail
+          DEVICE_ID=$(python3 - <<'PY'
+          import json, subprocess
+          data = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))
+          for runtime, devices in data["devices"].items():
+              if "iOS" not in runtime:
+                  continue
+              for device in devices:
+                  if device["name"].startswith("iPhone"):
+                      print(device["udid"])
+                      raise SystemExit
+          raise SystemExit("No iPhone simulator found")
+          PY
+          )
+          echo "Using simulator $DEVICE_ID"
+          echo "DEVICE_ID=$DEVICE_ID" >> "$GITHUB_ENV"
+
+          xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          xcrun simctl ui "$DEVICE_ID" appearance dark || true
+          xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --batteryState charged --batteryLevel 100 || true
+
+          xcodebuild \
+            -project NotiLab.xcodeproj \
+            -scheme NotiLab \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -derivedDataPath build-sim \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+          APP_PATH="build-sim/Build/Products/Debug-iphonesimulator/NotiLab.app"
+          test -d "$APP_PATH"
+          mkdir -p screenshots
+          xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+
+          xcrun simctl launch "$DEVICE_ID" com.irvintovar.notilab
+          sleep 4
+          xcrun simctl io "$DEVICE_ID" screenshot screenshots/01-programar.png
+
+          xcrun simctl terminate "$DEVICE_ID" com.irvintovar.notilab || true
+          xcrun simctl launch "$DEVICE_ID" com.irvintovar.notilab -templates
+          sleep 3
+          xcrun simctl io "$DEVICE_ID" screenshot screenshots/02-plantillas.png
+
+          xcrun simctl terminate "$DEVICE_ID" com.irvintovar.notilab || true
+          xcrun simctl launch "$DEVICE_ID" com.irvintovar.notilab -settings
+          sleep 3
+          xcrun simctl io "$DEVICE_ID" screenshot screenshots/03-ajustes.png
+
+          ls -lh screenshots
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotiLab-unsigned-ipa
+          path: |
+            NotiLab-unsigned.ipa
+            NotiLab-unsigned.ipa.sha256
+          if-no-files-found: error
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: NotiLab-screenshots
+          path: screenshots/*.png
+          if-no-files-found: error

@@ -1,0 +1,10 @@
+.DS_Store
+build/
+build-device/
+build-sim/
+DerivedData/
+Payload/
+screenshots/
+NotiLab.xcodeproj/
+*.ipa
+*.sha256
