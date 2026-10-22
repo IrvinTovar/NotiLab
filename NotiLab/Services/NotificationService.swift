@@ -81,11 +81,7 @@ final class NotificationService: ObservableObject {
                 "template": template.name
             ]
             if let attachmentURL,
-               let attachment = try? UNNotificationAttachment(
-                   identifier: "notilab.thumbnail",
-                   url: attachmentURL,
-                   options: nil
-               ) {
+               let attachment = makeAttachment(from: attachmentURL) {
                 content.attachments = [attachment]
             }
 
@@ -131,11 +127,7 @@ final class NotificationService: ObservableObject {
         content.threadIdentifier = "notilab.test"
         content.userInfo = ["demo": true, "template": template.name]
         if let attachmentURL = TemplateImageStore.shared.attachmentURL(for: template),
-           let attachment = try? UNNotificationAttachment(
-               identifier: "notilab.thumbnail",
-               url: attachmentURL,
-               options: nil
-           ) {
+           let attachment = makeAttachment(from: attachmentURL) {
             content.attachments = [attachment]
         }
 
@@ -194,6 +186,31 @@ final class NotificationService: ObservableObject {
                 return Double.random(in: start..<end)
             }
             .sorted()
+        }
+    }
+
+    private func makeAttachment(from sourceURL: URL) -> UNNotificationAttachment? {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NotiLabAttachments", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        let fileExtension = sourceURL.pathExtension.isEmpty ? "png" : sourceURL.pathExtension
+        let destination = directory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(fileExtension)
+
+        do {
+            try FileManager.default.copyItem(at: sourceURL, to: destination)
+            return try UNNotificationAttachment(
+                identifier: "notilab.thumbnail",
+                url: destination,
+                options: nil
+            )
+        } catch {
+            return nil
         }
     }
 
