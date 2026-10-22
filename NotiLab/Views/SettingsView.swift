@@ -244,9 +244,8 @@ struct SettingsView: View {
 // MARK: - Name editor
 
 struct NameListEditor: View {
-    @Binding var names: [String]
-
     let title: String
+    @Binding var names: [String]
 
     @State private var newName = ""
 
